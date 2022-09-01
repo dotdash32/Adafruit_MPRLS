@@ -125,7 +125,8 @@ boolean Adafruit_MPRLS::begin(uint8_t i2c_addr, TwoWire *twoWire) {
 /**************************************************************************/
 float Adafruit_MPRLS::readPressure(void) {
   uint32_t raw_psi = readData();
-  if (raw_psi == 0xFFFFFFFF || _OUTPUT_min == _OUTPUT_max) {
+  // invalid values might be all 1s, all 0s, or no output range
+  if (raw_psi == 0xFFFFFFFF || raw_psi == 0 || _OUTPUT_min == _OUTPUT_max ) {
     return NAN;
   }
 
