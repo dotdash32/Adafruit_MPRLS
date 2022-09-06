@@ -139,6 +139,41 @@ float Adafruit_MPRLS::readPressure(void) {
   return psi * _K;
 }
 
+void Adafruit_MPRLS::startPressureRead(MPRLS_callback callbackFunc) {
+  uint8_t buffer[4] = {0xAA, 0, 0, 0};
+  // Request data
+  i2c_dev->write(buffer, 3);
+  _nonBlockingCallback = callbackFunc;
+  _timeReq = millis();
+
+}
+
+
+
+void Adafruit_MPRLS::checkReturn(unsigned long time_now) {
+  if (nullptr != _nonBlockingCallback) {
+    if ((time_now - _timeReq > MPRLS_CHECK_TIME) || // time passing
+        ((_eoc != -1) && (!digitalRead(_eoc)))) { // eoc triggered
+      uint32_t raw_psi = readData_nb();
+      // invalid values might be all 1s, all 0s, or no output range
+      if (raw_psi == 0xFFFFFFFF || raw_psi == 0 ||
+          _OUTPUT_min == _OUTPUT_max ) {
+        _nonBlockingCallback(NAN);
+        _nonBlockingCallback = nullptr; // deactivate
+        return; // returning nan from above
+      } else {
+        // good data, return as desired, per above fun
+        float psi = (raw_psi - _OUTPUT_min) * (_PSI_max - _PSI_min);
+        psi /= (float)(_OUTPUT_max - _OUTPUT_min);
+        psi += _PSI_min;
+        psi *= _K; // convert to desired units
+        _nonBlockingCallback(psi);
+        _nonBlockingCallback = nullptr; // deactivate
+      }
+    }
+  }
+}
+
 /**************************************************************************/
 /*!
     @brief Read 24 bits of measurement data from the device
@@ -182,6 +217,32 @@ uint32_t Adafruit_MPRLS::readData(void) {
   // all good, return data
   return (uint32_t(buffer[1]) << 16) | (uint32_t(buffer[2]) << 8) |
          (uint32_t(buffer[3]));
+}
+
+
+uint32_t Adafruit_MPRLS::readData_nb(void) {
+  uint8_t buffer[4] = {0xAA, 0, 0, 0};
+
+  // check the status byte
+  if (readStatus() & MPRLS_STATUS_BUSY) {
+    // Read status byte and data
+    i2c_dev->read(buffer, 4);
+
+    // check status byte
+    if (buffer[0] & MPRLS_STATUS_MATHSAT) {
+      return 0xFFFFFFFF;
+    }
+    if (buffer[0] & MPRLS_STATUS_FAILED) {
+      return 0xFFFFFFFF;
+    }
+
+    // all good, return data
+    return (uint32_t(buffer[1]) << 16) | (uint32_t(buffer[2]) << 8) |
+          (uint32_t(buffer[3]));
+  } else {
+    // did not get a ready status
+    return -2; // not quite 0xFFFFFFFF
+  }
 }
 
 /**************************************************************************/

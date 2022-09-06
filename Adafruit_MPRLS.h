@@ -35,6 +35,9 @@
 #define PSI_to_HPA (68.947572932)   ///< Constant: PSI to HPA conversion factor
 #define MPRLS_STATUS_MASK                                                      \
   (0b01100101) ///< Sensor status mask: only these bits are set
+#define MPRLS_CHECK_TIME   3 // [ms] how often to check status
+
+typedef void (*MPRLS_callback) (float pressure);
 
 /**************************************************************************/
 /*!
@@ -53,15 +56,22 @@ public:
 
   uint8_t readStatus(void);
   float readPressure(void);
+  void startPressureRead(MPRLS_callback callbackFunc);
+  void checkReturn(unsigned long time_now);
 
   uint8_t lastStatus; /*!< status byte after last operation */
 
 private:
   Adafruit_I2CDevice *i2c_dev = NULL; ///< Pointer to I2C bus interface
   uint32_t readData(void);
+  uint32_t readData_nb(void);
 
   int8_t _reset, _eoc;
   uint16_t _PSI_min, _PSI_max;
   uint32_t _OUTPUT_min, _OUTPUT_max;
   float _K;
+
+  unsigned long _timeReq; // when last request was generated
+  MPRLS_callback _nonBlockingCallback; // which func to cal
+
 };
