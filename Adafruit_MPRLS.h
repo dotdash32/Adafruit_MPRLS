@@ -35,7 +35,7 @@
 #define PSI_to_HPA (68.947572932)   ///< Constant: PSI to HPA conversion factor
 #define MPRLS_STATUS_MASK                                                      \
   (0b01100101) ///< Sensor status mask: only these bits are set
-#define MPRLS_CHECK_TIME   3 // [ms] how often to check status
+#define MPRLS_CHECK_TIME   5 // [ms] how often to check status
 
 typedef void (*MPRLS_callback) (float pressure);
 
@@ -57,7 +57,7 @@ public:
   uint8_t readStatus(void);
   float readPressure(void);
   void startPressureRead(MPRLS_callback callbackFunc);
-  void checkReturn(unsigned long time_now);
+  bool checkReturn(unsigned long time_now);
 
   uint8_t lastStatus; /*!< status byte after last operation */
 

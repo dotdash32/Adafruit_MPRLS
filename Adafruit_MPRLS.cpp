@@ -140,7 +140,7 @@ float Adafruit_MPRLS::readPressure(void) {
 }
 
 void Adafruit_MPRLS::startPressureRead(MPRLS_callback callbackFunc) {
-  uint8_t buffer[4] = {0xAA, 0, 0, 0};
+  uint8_t buffer[3] = {0xAA, 0, 0};
   // Request data
   i2c_dev->write(buffer, 3);
   _nonBlockingCallback = callbackFunc;
@@ -148,9 +148,7 @@ void Adafruit_MPRLS::startPressureRead(MPRLS_callback callbackFunc) {
 
 }
 
-
-
-void Adafruit_MPRLS::checkReturn(unsigned long time_now) {
+bool Adafruit_MPRLS::checkReturn(unsigned long time_now) {
   if (nullptr != _nonBlockingCallback) {
     if ((time_now - _timeReq > MPRLS_CHECK_TIME) || // time passing
         ((_eoc != -1) && (!digitalRead(_eoc)))) { // eoc triggered
@@ -158,9 +156,11 @@ void Adafruit_MPRLS::checkReturn(unsigned long time_now) {
       // invalid values might be all 1s, all 0s, or no output range
       if (raw_psi == 0xFFFFFFFF || raw_psi == 0 ||
           _OUTPUT_min == _OUTPUT_max ) {
-        _nonBlockingCallback(NAN);
+        _nonBlockingCallback(NAN); // returning nan from above
         _nonBlockingCallback = nullptr; // deactivate
-        return; // returning nan from above
+      } else if (0xFFFFFFFE == raw_psi) { // special not-finished return
+        // don't need to do anything, update timing
+        _timeReq = time_now;
       } else {
         // good data, return as desired, per above fun
         float psi = (raw_psi - _OUTPUT_min) * (_PSI_max - _PSI_min);
@@ -170,8 +170,10 @@ void Adafruit_MPRLS::checkReturn(unsigned long time_now) {
         _nonBlockingCallback(psi);
         _nonBlockingCallback = nullptr; // deactivate
       }
+      return true; // we did an update
     }
   }
+  return false; // nothing happened
 }
 
 /**************************************************************************/
@@ -221,10 +223,10 @@ uint32_t Adafruit_MPRLS::readData(void) {
 
 
 uint32_t Adafruit_MPRLS::readData_nb(void) {
-  uint8_t buffer[4] = {0xAA, 0, 0, 0};
+  uint8_t buffer[4];
 
   // check the status byte
-  if (readStatus() & MPRLS_STATUS_BUSY) {
+  if (!(readStatus() & MPRLS_STATUS_BUSY)) {
     // Read status byte and data
     i2c_dev->read(buffer, 4);
 
@@ -241,7 +243,7 @@ uint32_t Adafruit_MPRLS::readData_nb(void) {
           (uint32_t(buffer[3]));
   } else {
     // did not get a ready status
-    return -2; // not quite 0xFFFFFFFF
+    return 0xFFFFFFFE; // not quite 0xFFFFFFFF
   }
 }
 
